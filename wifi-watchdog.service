@@ -1,0 +1,14 @@
+[Unit]
+Description=WiFi Connectivity Watchdog
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /usr/local/bin/wifi_watchdog.py
+Restart=always
+RestartSec=10
+User=root
+
+[Install]
+WantedBy=multi-user.target
