@@ -33,10 +33,11 @@ LOCAL_CACHE = Path.home() / ".cache" / "co2_analyzer"
 plt.style.use('seaborn-v0_8-darkgrid')
 COLORS = {
     'treatment': '#00bfff',
-    'control': '#ff6b6b', 
+    'control': '#ff6b6b',
     'delta': '#4caf50',
     'correlation': '#9c27b0'
 }
+SMOOTH_WINDOW = 20  # seconds for derivative smoothing
 
 
 class DriveAnalyzer:
@@ -314,6 +315,26 @@ def rolling_correlation(x, y, window):
     return pd.Series(result, index=x.index)
 
 
+def compute_rate(series, window=SMOOTH_WINDOW):
+    """
+    Compute rate of change (dCO2/dt) with smoothing.
+
+    Method:
+    1. Apply rolling mean to smooth the signal
+    2. Compute derivative using central difference
+
+    Returns rate in ppm/second.
+    """
+    # Smooth first to reduce noise
+    smoothed = series.rolling(window, center=True, min_periods=1).mean()
+
+    # Central difference for derivative (more accurate than forward diff)
+    # rate[i] = (smoothed[i+1] - smoothed[i-1]) / 2
+    rate = (smoothed.shift(-1) - smoothed.shift(1)) / 2
+
+    return rate
+
+
 def compute_stats(df):
     """Compute summary statistics."""
     n = len(df)
@@ -345,81 +366,72 @@ def compute_stats(df):
 
 
 def generate_analysis_plot(df, stats, title, output_path):
-    """Generate multi-panel analysis figure."""
-    has_dual = 'co2_control' in df.columns and df['co2_control'].notna().any()
-    
-    n_panels = 3 if has_dual else 1
-    
-    fig, axes = plt.subplots(n_panels, 1, figsize=(14, 3 * n_panels), sharex=True)
-    if n_panels == 1:
-        axes = [axes]
-    
+    """Generate 3-panel rate analysis figure."""
+    fig, axes = plt.subplots(3, 1, figsize=(14, 10))
+
     hours = df['hours']
-    ax_idx = 0
-    
-    # Panel 1: CO2 Overview
-    ax = axes[ax_idx]
-    window = 300  # 5-min smoothing
-    
-    if 'co2_treatment' in df.columns:
-        ax.plot(hours, df['co2_treatment'], color=COLORS['treatment'], 
-                alpha=0.3, linewidth=0.5, label='Treatment (raw)')
-        ax.plot(hours, df['co2_treatment'].rolling(window, min_periods=1).mean(),
-                color=COLORS['treatment'], linewidth=2, label='Treatment (5-min)')
-    
-    if has_dual:
+
+    # Check which columns we have
+    has_treatment = 'co2_treatment' in df.columns
+    has_control = 'co2_control' in df.columns and df['co2_control'].notna().any()
+
+    # Compute rates
+    if has_treatment:
+        rate_treatment = compute_rate(df['co2_treatment'])
+    if has_control:
+        rate_control = compute_rate(df['co2_control'])
+
+    # ===== Panel 1: Raw CO2 vs Time =====
+    ax = axes[0]
+    if has_treatment:
+        ax.plot(hours, df['co2_treatment'], color=COLORS['treatment'],
+                alpha=0.7, linewidth=0.8, label='Treatment')
+    if has_control:
         ax.plot(hours, df['co2_control'], color=COLORS['control'],
-                alpha=0.3, linewidth=0.5, label='Control (raw)')
-        ax.plot(hours, df['co2_control'].rolling(window, min_periods=1).mean(),
-                color=COLORS['control'], linewidth=2, label='Control (5-min)')
-    
+                alpha=0.7, linewidth=0.8, label='Control')
+
     ax.set_ylabel('CO2 (ppm)')
-    ax.legend(loc='upper left', fontsize=8)
     ax.set_title(title, fontsize=12, fontweight='bold')
-    ax_idx += 1
-    
-    # Panel 2: Delta (if dual sensor)
-    if has_dual and 'delta' in df.columns:
-        ax = axes[ax_idx]
-        ax.plot(hours, df['delta'], color=COLORS['delta'], alpha=0.3, linewidth=0.5)
-        ax.plot(hours, df['delta'].rolling(window, min_periods=1).mean(),
-                color=COLORS['delta'], linewidth=2, label='Delta (5-min)')
-        ax.axhline(0, color='gray', linestyle='--', alpha=0.5)
-        ax.axhline(stats.get('delta_mean', 0), color='orange', linewidth=1.5,
-                   label=f"Mean: {stats.get('delta_mean', 0):.1f}")
-        ax.set_ylabel('Delta CO2 (ppm)')
-        ax.legend(loc='upper left', fontsize=8)
-        ax_idx += 1
-    
-    # Panel 3: Rolling Correlation (if dual sensor)
-    if has_dual:
-        ax = axes[ax_idx]
-        corr_window = 900  # 15-min
-        roll_corr = rolling_correlation(df['co2_treatment'], df['co2_control'], corr_window)
-        ax.plot(hours, roll_corr, color=COLORS['correlation'], linewidth=1.5)
-        ax.axhline(0.8, color='green', linestyle='--', alpha=0.5, label='Good (0.8)')
-        ax.axhline(0, color='red', linestyle='--', alpha=0.5)
-        ax.set_ylabel('15-min Rolling R')
-        ax.set_ylim(-0.5, 1.05)
-        ax.legend(loc='lower left', fontsize=8)
-        ax_idx += 1
-    
-    axes[-1].set_xlabel('Hours')
-    
-    # Add stats text box
-    stats_text = f"Duration: {stats['duration_hrs']:.1f}h | Samples: {stats['samples']:,}"
-    if 'correlation' in stats:
-        stats_text += f" | R: {stats['correlation']:.3f}"
-    if 'delta_mean' in stats:
-        stats_text += f" | Delta: {stats['delta_mean']:.1f}+/-{stats['delta_std']:.1f}"
-    
-    fig.text(0.5, 0.02, stats_text, ha='center', fontsize=9, 
-             bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
-    
-    plt.tight_layout(rect=[0, 0.04, 1, 1])
+    ax.legend(loc='upper right', fontsize=9)
+
+    # ===== Panel 2: Rate vs Time =====
+    ax = axes[1]
+    if has_treatment:
+        ax.plot(hours, rate_treatment, color=COLORS['treatment'],
+                alpha=0.7, linewidth=0.8, label='Treatment dCO2/dt')
+    if has_control:
+        ax.plot(hours, rate_control, color=COLORS['control'],
+                alpha=0.7, linewidth=0.8, label='Control dCO2/dt')
+
+    ax.axhline(0, color='gray', linestyle='--', alpha=0.5)
+    ax.set_ylabel('Rate (ppm/sec)')
+    ax.set_title(f'Rate of Change (dCO2/dt) - {SMOOTH_WINDOW}s smoothing', fontsize=10)
+    ax.legend(loc='upper right', fontsize=9)
+
+    # ===== Panel 3: Rate vs Concentration (Scatter) =====
+    ax = axes[2]
+
+    # Downsample for scatter if dataset is large (every Nth point)
+    step = max(1, len(df) // 5000)
+
+    if has_treatment:
+        ax.scatter(df['co2_treatment'].iloc[::step], rate_treatment.iloc[::step],
+                   c=COLORS['treatment'], alpha=0.3, s=8, label='Treatment')
+    if has_control:
+        ax.scatter(df['co2_control'].iloc[::step], rate_control.iloc[::step],
+                   c=COLORS['control'], alpha=0.3, s=8, label='Control')
+
+    ax.axhline(0, color='gray', linestyle='--', alpha=0.5)
+    ax.set_xlabel('CO2 Concentration (ppm)')
+    ax.set_ylabel('Rate (ppm/sec)')
+    ax.set_title('Rate vs Concentration', fontsize=10)
+    ax.legend(loc='upper right', fontsize=9)
+
+    # Layout
+    plt.tight_layout()
     plt.savefig(output_path, dpi=150, bbox_inches='tight', facecolor='white')
     plt.close()
-    
+
     return output_path
 
 

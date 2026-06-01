@@ -39,12 +39,13 @@ TOKEN_FILE = Path.home() / ".config" / "co2_uploader" / "token.json"
 UPLOAD_FLAG = Path('/tmp/upload_in_progress')
 
 # Google Drive API scope
-SCOPES = ['https://www.googleapis.com/auth/drive.file']
+# drive scope needed to see manually-created folders (like EarlySetupData)
+SCOPES = ['https://www.googleapis.com/auth/drive']
 
 # Upload settings
 CHECK_INTERVAL = 60  # seconds between checks for new experiments
-WIFI_CHECK_INTERVAL = 300  # seconds between WiFi availability checks
-COMPLETION_WAIT = 720  # seconds of no changes before considering experiment complete
+WIFI_CHECK_INTERVAL = 30  # seconds between WiFi availability checks
+COMPLETION_WAIT = 120  # seconds of no changes before considering experiment complete
 
 # Target folder ID - your existing Google Drive folder
 USE_EXISTING_FOLDER_ID = "1176LdK5iW7yMf7wpxuTmtJ_WkAsIxdsd"
