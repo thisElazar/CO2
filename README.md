@@ -10,91 +10,81 @@ Mormon Slough Restoration Research - Air Quality Science Project
 
 | Command | Where | What it does |
 |---------|-------|--------------|
-| `python3 co2_drive_analyzer.py --list` | Mac | List experiments in Drive root folder |
-| `python3 co2_drive_analyzer.py --list -r` | Mac | List all experiments including subfolders |
-| `python3 co2_drive_analyzer.py --list -f EarlySetupData` | Mac | List experiments in a specific subfolder |
-| `python3 co2_drive_analyzer.py --analyze latest` | Mac | Generate analysis chart for most recent experiment |
-| `python3 co2_drive_analyzer.py --analyze all` | Mac | Generate charts for all experiments (skips existing) |
-| `python3 co2_drive_analyzer.py --analyze all -r` | Mac | Generate charts for all experiments including subfolders |
-| `python3 co2_drive_analyzer.py --index` | Mac | Regenerate public JSON index with stats |
-| `python3 co2_drive_analyzer.py --dashboard` | Mac | Generate self-contained HTML dashboard |
-| `python3 co2_drive_analyzer.py --dashboard -r` | Mac | Dashboard including subfolder experiments |
-| `python3 co2_drive_analyzer.py --local data.csv` | Mac | Analyze a local CSV file |
+| `python3 co2_analyzer.py --list` | Mac | List all experiments from WandR |
+| `python3 co2_analyzer.py --list --filter test` | Mac | List only test experiments |
+| `python3 co2_analyzer.py --analyze latest` | Mac | Generate analysis chart for most recent |
+| `python3 co2_analyzer.py --analyze all` | Mac | Generate charts for all experiments |
+| `python3 co2_analyzer.py --local data.csv` | Mac | Analyze a local CSV file |
 | `ssh thiselazar@co2sensor01.local` | Mac | Connect to the Pi sensor device |
-| `sudo systemctl status co2logger` | Pi | Check data logger service status |
-| `sudo systemctl status co2-drive-sync` | Pi | Check Drive uploader service status |
-| `journalctl -u co2logger -f` | Pi | Live view of data logger output |
-| `journalctl -u co2-drive-sync -f` | Pi | Live view of uploader output |
+| `journalctl -u co2-data-logger -f` | Pi | Live view of data logger output |
+| `journalctl -u co2-wandr-sync -f` | Pi | Live view of uploader output |
+| `journalctl -u co2-wifi-manager -f` | Pi | Live view of WiFi manager |
 
-### Key Files
+### Web Dashboard
 
-| File | Location | Purpose |
-|------|----------|---------|
-| `dualSensorLoggerLEDScreen_v3_1.ino` | Arduino | Sensor control, UI, experiment management |
-| `dualSensorDataLoggerLCD_v3_2_robust.py` | Pi | Receives data from Arduino, saves to disk |
-| `co2_drive_uploader.py` | Pi | Monitors experiments, uploads to Google Drive |
-| `co2_drive_analyzer.py` | Mac | Downloads from Drive, generates analysis charts |
-| `photosynthesis_comparison.png` | Mac | Latest comparative analysis visualization |
+| URL | What |
+|-----|------|
+| `wandr.hatchworkshop.org/co2` | Standalone CO2 experiments dashboard |
+| `wandr.hatchworkshop.org/dashboard` | Full WandR dashboard (CO2 under Science) |
+
+### Key Repos
+
+| Repo | What |
+|------|------|
+| `github.com/thisElazar/CO2` | This repo — Mac-side analyzer |
+| `github.com/thisElazar/hatch-wandr` | WandR server + Pi/Arduino code (`sensors/co2/`) |
 
 ---
 
 ## System Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              HARDWARE LAYER                                  │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│   ┌─────────────┐     ┌─────────────┐                                       │
-│   │  MHZ19 #1   │     │  MHZ19 #2   │    Two CO2 sensors                    │
-│   │ (Treatment) │     │  (Control)  │    measuring simultaneously           │
-│   └──────┬──────┘     └──────┬──────┘                                       │
-│          │                   │                                              │
-│          └─────────┬─────────┘                                              │
-│                    ▼                                                        │
-│   ┌────────────────────────────────┐                                        │
-│   │     Arduino (Nano/Uno)         │                                        │
-│   │  • Rotary encoder UI           │                                        │
-│   │  • 20x4 LCD display            │                                        │
-│   │  • RGB LED feedback            │                                        │
-│   │  • Experiment state machine    │                                        │
-│   └───────────────┬────────────────┘                                        │
-│                   │ Serial @ 9600 baud                                      │
-│                   ▼                                                         │
-│   ┌────────────────────────────────┐                                        │
-│   │   Raspberry Pi Zero 2 W        │   co2sensor01.local                    │
-│   │  • Data logger service         │                                        │
-│   │  • Drive upload service        │                                        │
-│   │  • WiFi connectivity           │                                        │
-│   └───────────────┬────────────────┘                                        │
-│                   │ WiFi                                                    │
-└───────────────────┼─────────────────────────────────────────────────────────┘
-                    │
-                    ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              CLOUD LAYER                                     │
-├─────────────────────────────────────────────────────────────────────────────┤
-│   ┌────────────────────────────────┐                                        │
-│   │        Google Drive            │                                        │
-│   │  • Experiment folders          │                                        │
-│   │  • CSV data files              │                                        │
-│   │  • Analysis PNG charts         │                                        │
-│   │  • experiments_index.json      │                                        │
-│   └───────────────┬────────────────┘                                        │
-└───────────────────┼─────────────────────────────────────────────────────────┘
-                    │
-                    ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                             ANALYSIS LAYER                                   │
-├─────────────────────────────────────────────────────────────────────────────┤
-│   ┌────────────────────────────────┐                                        │
-│   │        Mac / Workstation       │                                        │
-│   │  • co2_drive_analyzer.py       │   Runs on demand                       │
-│   │  • Chart generation            │                                        │
-│   │  • Statistical analysis        │                                        │
-│   │  • HTML dashboard export       │                                        │
-│   └────────────────────────────────┘                                        │
-└─────────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                         HARDWARE                                │
+│                                                                 │
+│   MHZ19 #1 (Treatment)    MHZ19 #2 (Control)                   │
+│         └────────┬────────────┘                                 │
+│                  ▼                                              │
+│   ┌──────────────────────────┐                                  │
+│   │     Arduino Uno          │  Rotary encoder UI, LCD,         │
+│   │     (v3.1 firmware)      │  RGB LEDs, experiment state      │
+│   └───────────┬──────────────┘  machine                         │
+│               │ Serial @ 9600 baud                              │
+│               ▼                                                 │
+│   ┌──────────────────────────┐                                  │
+│   │  Raspberry Pi Zero 2 W   │  co2sensor01.local               │
+│   │  • data_logger.py        │  Listens, writes CSV             │
+│   │  • uploader.py           │  Uploads to WandR via HTTPS      │
+│   │  • wifi_manager.py       │  Captive portal for WiFi setup   │
+│   │  • status_monitor.py     │  GPIO LED feedback               │
+│   └───────────┬──────────────┘                                  │
+│               │ WiFi / HTTPS                                    │
+└───────────────┼─────────────────────────────────────────────────┘
+                │
+                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    WANDR SERVER (hatch-wandr)                    │
+│                                                                 │
+│   POST /api/devices/upload    ← Pi uploads experiments here     │
+│   GET  /api/science/experiments  ← Dashboard + analyzer read    │
+│   GET  /api/devices              ← Device fleet management      │
+│                                                                 │
+│   /mnt/storage/science/co2_experiments/                         │
+│   ├── {experiment_id}/data.csv + metadata.json                  │
+│   ├── _devices/co2-sensor-01.json                               │
+│   └── _tokens/                                                  │
+│                                                                 │
+│   Web UI:                                                       │
+│   • /co2           Standalone experiments + devices dashboard   │
+│   • /dashboard     Full WandR (CO2 under "CO2 Experiments")     │
+└─────────────────────────────────────────────────────────────────┘
+                │
+                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    MAC (this repo)                               │
+│                                                                 │
+│   co2_analyzer.py  ← Pulls from WandR API, generates PNGs      │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -110,100 +100,75 @@ DATA,elapsed_sec,co2_treatment,temp_treatment,co2_control,temp_control
 Example: DATA,127,485,22,491,23
 ```
 
-The Pi's `dualSensorDataLoggerLCD_v3_2_robust.py`:
+The Pi's `data_logger.py`:
 - Listens passively for DATA lines
 - Writes to RAM (`/tmp/co2_experiments/`) first (protects SD card)
 - Syncs to SD (`~/Documents/co2_experiments/`) every 5 minutes
-- Creates experiment folder with timestamp: `YYYYMMDD_HHMMSS_<type>_<location>`
+- Creates experiment folder: `YYYYMMDD_HHMMSS_<type>_<location>`
 
-### 2. Upload to Cloud (Pi → Google Drive)
+### 2. Upload to WandR (Pi → Server)
 
-The `co2_drive_uploader.py` service:
-- Monitors `~/Documents/co2_experiments/` for new folders
-- Waits 12 minutes after last modification (experiment complete)
-- Uploads CSV + metadata.json to Google Drive
-- Blinks blue LED during upload
+The `uploader.py` service:
+- Scans for completed experiments every 60 seconds
+- Experiment is "complete" after 2 minutes of no changes
+- HTTPS POST to `wandr.hatchworkshop.org/api/devices/upload`
+- Bearer token auth (per-device, stored in `/etc/co2-sensor/device.conf`)
+- Server scores experiment quality on ingest (0-5)
+- Blue LED blinks during upload
 
-### 3. Analysis (Google Drive → Mac)
+### 3. Analysis
 
-Run manually on Mac with `co2_drive_analyzer.py`:
-- Downloads experiment CSVs from Drive
-- Computes statistics (correlation, delta mean/std, duration)
-- Generates multi-panel PNG visualizations
-- Uploads PNGs back to Drive
+**Browser (primary):** Visit `wandr.hatchworkshop.org/co2` for interactive charts, annotations, media attachments, and device management.
+
+**CLI (optional):** Run `python3 co2_analyzer.py` on Mac for local PNG generation.
 
 ---
 
-## Components
+## New Device Setup
 
-### Arduino Firmware (`dualSensorLoggerLEDScreen_v3_1.ino`)
+### Provisioning a new sensor
 
-**State Machine:**
-- `LIVE_READING` - Default mode, shows real-time CO2 on LCD
-- `MODE_SELECT` - Choose: Live / Log Experiment / Calibrate
-- `EXP_TYPE_SELECT` - Choose: Control / Test / Throwaway
-- `LOGGING` - Recording data, sends DATA lines over serial
-- `CALIBRATION` - Zero-point calibration mode
-
-**Hardware Pins:**
-```
-Sensor 1 (Treatment): RX=D2, TX=D4
-Sensor 2 (Control):   RX=D7, TX=D8
-LED 1 RGB: R=D3, G=D5, B=D6 (PWM)
-LED 2 RGB: R=D9, G=D10, B=D11 (PWM)
-Recording LED: D13
-Rotary Encoder: CLK=A1, DT=A2, SW=A3
-LCD I2C: SDA=A4, SCL=A5
-```
-
-**LED Color Mapping:**
-- Green: CO2 < 600 ppm (fresh air)
-- Yellow: 600-1000 ppm (moderate)
-- Red: > 1000 ppm (high)
-
-### Pi Data Logger (`dualSensorDataLoggerLCD_v3_2_robust.py`)
-
-**Key Features:**
-- Passive listening (Arduino controls experiment)
-- RAM-first writes (SD card protection)
-- Auto-reconnect on serial disconnect (up to 10 attempts)
-- Saves in-progress data before reconnection
-
-**Output Format (`data.csv`):**
-```csv
-elapsed_seconds,co2_treatment,temp_treatment,co2_control,temp_control,delta_raw
-1,485,22,491,23,-6
-2,484,22,490,23,-6
-...
-```
-
-### Pi Drive Uploader (`co2_drive_uploader.py`)
-
-**Key Features:**
-- Monitors for completed experiments (12 min no changes)
-- Checks WiFi before upload attempts
-- Creates matching folder structure in Drive
-- LED feedback during upload
-
-**Systemd Services:**
 ```bash
-# Data logger
-sudo systemctl start co2logger
-sudo systemctl stop co2logger
-sudo systemctl restart co2logger
+# 1. Flash Raspberry Pi OS to SD card (configure WiFi in Imager)
+# 2. Wire Arduino to Pi via USB
+# 3. Flash Arduino with firmware from wandr/sensors/co2/firmware/
+# 4. Copy sensor code to Pi:
+scp -r wandr/sensors/co2/ user@new-pi.local:/tmp/co2-setup/
 
-# Drive uploader
-sudo systemctl start co2-drive-sync
-sudo systemctl stop co2-drive-sync
-sudo systemctl restart co2-drive-sync
+# 5. SSH in and provision:
+ssh user@new-pi.local
+bash /tmp/co2-setup/deploy/provision.sh co2-sensor-02 "Classroom Unit" "Lincoln High School"
 ```
 
-### Mac Analyzer (`co2_drive_analyzer.py`)
+The provisioning script:
+- Installs dependencies (`python3-serial`)
+- Registers the device with WandR (gets auth token)
+- Installs code to `/opt/co2-sensor/`
+- Enables systemd services
+- Switches to headless mode (no desktop)
 
-**Analysis Output:**
-- 3-panel PNG: CO2 overview, Delta, Rolling correlation
-- Statistics: samples, duration, correlation, delta mean/std
-- Public JSON index for web viewers
+### WiFi Setup (for deployed devices)
+
+If a device can't connect to WiFi, it broadcasts a **CO2-Sensor-Setup** hotspot. Connect with a phone (password: `co2sensor`), enter the local WiFi credentials on the captive portal page, and the device switches to the new network.
+
+---
+
+## Pi Services
+
+| Service | Purpose |
+|---------|---------|
+| `co2-data-logger` | Reads Arduino serial, writes CSV |
+| `co2-wandr-sync` | Uploads completed experiments to WandR |
+| `co2-wifi-manager` | WiFi management + captive portal fallback |
+| `co2-status-monitor` | GPIO LED feedback (green/blue/red) |
+
+```bash
+# Check all services
+systemctl is-active co2-data-logger co2-wandr-sync co2-wifi-manager
+
+# View logs
+journalctl -u co2-wandr-sync -f
+```
 
 ---
 
@@ -220,34 +185,6 @@ sudo systemctl restart co2-drive-sync
 
 ---
 
-## Experiment Organization
-
-Experiments in Google Drive can be organized into subfolders for better management:
-
-```
-CO2 Experiments/
-├── 20260115_141221_test_photosynthesis/   ← Active experiments in root
-├── 20260115_132412_test_photosynthesis/
-├── EarlySetupData/                         ← Archived setup/calibration data
-│   ├── 20251225_165636_control_window/
-│   └── ... (92 experiments)
-└── experiments_index.json
-```
-
-**Workflow:**
-- New experiments upload to the root folder automatically
-- After analysis, move old/setup experiments to subfolders via Google Drive
-- Use `--recursive` flag when you need to analyze across all experiments
-
-**Subfolder Flags:**
-| Flag | Effect |
-|------|--------|
-| (none) | Only root folder experiments |
-| `-r` / `--recursive` | Include all subfolders |
-| `-f NAME` / `--folder NAME` | Target specific subfolder only |
-
----
-
 ## Data Analysis
 
 ### Key Metrics
@@ -257,7 +194,7 @@ CO2 Experiments/
 | **Correlation** | How well sensors track together | > 0.95 for control |
 | **Delta Mean** | Average (Treatment - Control) | ~0 for control |
 | **Delta Std** | Variability of difference | < 5 ppm for control |
-| **Delta Change** | Drift over experiment | < 10 ppm for control |
+| **Quality Score** | Automated 0-5 rating | 4+ for publishable data |
 
 ### Interpreting Photosynthesis Results
 
@@ -265,87 +202,40 @@ CO2 Experiments/
 - **Delta decreasing over time** = Active photosynthesis
 - **Negative correlation** = Sensors diverging (one up, one down)
 
-Example from 2026-01-10 photosynthesis run:
-- Control baseline: Delta = +3.9 ppm (sensors matched)
-- Photosynthesis: Delta = -143.4 ppm (plant absorbing CO2)
-- **Signal: -147 ppm difference**
-
 ---
 
-## File Locations
+## Code Locations
 
-### On Pi (`co2sensor01.local`)
-
-```
-/home/thiselazar/
-├── dualSensorDataLoggerLCD_v3_2_robust.py   # Main logger
-├── co2_drive_uploader.py                     # Upload service
-├── Documents/co2_experiments/                # Experiment data
-│   ├── YYYYMMDD_HHMMSS_type_location/
-│   │   ├── data.csv
-│   │   └── metadata.json
-│   └── .upload_tracker.json
-└── .config/co2_uploader/
-    ├── credentials.json                      # OAuth app creds
-    └── token.json                            # Access token
-```
-
-### On Mac
+### This repo (Mac-side analysis)
 
 ```
-/Users/fields/CO2/
-├── README.md                                 # This file
-├── co2_drive_analyzer.py                     # Analysis script
-├── photosynthesis_comparison.png             # Latest analysis
-├── co2_dashboard.html                        # Web dashboard
-├── co2_web_viewer.html                       # Remote viewer
-└── Air Quality Science/
-    └── dualSensor/
-        ├── dualSensorLoggerLEDScreen_v3_1/   # Arduino firmware
-        └── co2_experiments/                  # Local experiment copies
+co2_analyzer.py              Pulls from WandR API, generates PNGs
+analyze_drawdown.py          CO2 drawdown analysis
+co2_rate_analysis.py         Rate of change analysis
 ```
 
-### On Google Drive
+### WandR repo (`sensors/co2/`)
 
 ```
-CO2 Experiments/
-├── experiments_index.json                    # Public index
-├── YYYYMMDD_HHMMSS_type_location/
-│   ├── data.csv
-│   ├── metadata.json
-│   └── *_analysis.png                        # Generated charts
-└── EarlySetupData/                           # Legacy experiments
+pi/
+  data_logger.py             Arduino serial → CSV
+  uploader.py                HTTPS upload to WandR
+  wifi_manager.py            Captive portal + WiFi management
+  status_monitor.py          GPIO LED feedback
+  wifi_watchdog.py           Legacy WiFi reconnection
+firmware/
+  dualSensorLoggerLEDScreen/ Arduino .ino source (v3.1)
+deploy/
+  provision.sh               One-command new device setup
+  *.service                  Systemd unit files
 ```
 
----
+### WandR server
 
-## Troubleshooting
-
-### Pi not logging data
-```bash
-ssh thiselazar@co2sensor01.local
-journalctl -u co2logger -f          # Check for errors
-sudo systemctl restart co2logger    # Restart service
 ```
-
-### Experiments not uploading
-```bash
-journalctl -u co2-drive-sync -f     # Check uploader logs
-ping google.com                      # Check WiFi
-sudo systemctl restart co2-drive-sync
-```
-
-### Arduino not responding
-- Check USB connection
-- Verify correct port in Pi logs
-- Try unplugging and reconnecting
-- Check Arduino IDE serial monitor (9600 baud)
-
-### Analysis script errors
-```bash
-# Re-authenticate if token expired
-cd /Users/fields/CO2
-python3 co2_drive_analyzer.py --list   # Will prompt for auth if needed
+dashboard/server/routes/devices.js    Upload API + device registry
+dashboard/server/lib/co2-scoring.js   Experiment quality scoring
+/mnt/storage/science/co2_experiments/ Experiment data (source of truth)
 ```
 
 ---
@@ -353,7 +243,7 @@ python3 co2_drive_analyzer.py --list   # Will prompt for auth if needed
 ## Hardware BOM
 
 - Raspberry Pi Zero 2 W
-- Arduino Nano (or Uno)
+- Arduino Uno
 - 2x MHZ19B CO2 Sensors
 - 20x4 I2C LCD Display
 - 2x RGB LEDs (common cathode)
@@ -364,14 +254,4 @@ python3 co2_drive_analyzer.py --list   # Will prompt for auth if needed
 
 ---
 
-## Future Improvements
-
-- [ ] Automatic chart generation on Mac when new uploads detected
-- [ ] Light sensor integration for photosynthesis correlation
-- [ ] Temperature/humidity logging (DHT22)
-- [ ] Real-time web dashboard with WebSocket updates
-- [ ] Mobile alerts for experiment completion
-
----
-
-*Last updated: 2026-01-15*
+*Last updated: 2026-06-07*
